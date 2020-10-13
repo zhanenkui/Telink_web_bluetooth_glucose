@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="bluez-web-bluetooth" content="width=device-width, initial-scale=1.0">
+        <title>Document</title>
+        <script src="telink-glucose.js"></script>
+
+    </head>
+    <style>
+      html { margin: 0; padding: 0; border: 0; }
+      body { font-family: 'Raleway', sans-serif; color: #d7ecfb; background-color: #072b44; text-align: center; }
+      textarea{color:greenyellow; background-color:black;}
+    </style>
+    <body>
+        <h3>Web Bluetooth Glucose Measurement</h3><hr>
+        <div id="showlog" style="width: 700px;float: left;">
+          <button style="float: left;" onclick="clearLoginfo()">clear log</button>
+          <button id="btn-connect" onclick="clickConnect()">scan bluetooth</button>
+          <button id="btn-disconnet" onclick="deviceDisconnect()">Disconnect</button><br><br>
+          <textarea id="log" cols="100" rows="20" readonly="readonly"></textarea>
+          <div id="statusText">Glucose value</div><br><br>
+        </div>
+    </body>
+</html>
+
+<script>
+
+    var blockCount,firmwareArray = "";            //ota-file
+    var startTime,sendcmd;                        //sendcmd and time
+    var last4byte,OTAversion=0,actionOTA_03ff=0;  //version check and authentication
+    var ServiceMain,nitifiyCharTemp;              //2b12notify
+    var OTApause=1,OTApuasecount=0;               //OTA-puase,count
+    var ten = 0;
+
+    var canvas = document.querySelector('canvas');
+    var statusText = document.querySelector('#statusText');
+    var fanlight = new Fanlight();
+
+    /**
+     * @clickConnect
+     * Scan and connect to nearby Bluetooth devices
+    */
+    function clickConnect(){
+      fanlight.request().then(connt => {
+        addLoginfo("Bluetooth connection successful");
+      })
+      .catch(error => {
+        addLoginfo('Argh! ' + error);
+      });
+    }
+
+
+    function read_heart_rate(){
+      nitifiyCharTemp.readValue().then(result => {
+        addLoginfo("yi xi shi read value");
+        addLoginfo(result);
+        addLoginfo(result.getUint8(0));
+      });
+    }
+  /**
+   * @otaCharSend
+   * Send data by characteristic
+   */
+  var otaCharSend = function(data) {
+    return new Promise(function(resolve, reject) {
+        console.log("OTA: " + data);
+        fanlight.Txchartic.writeValueWithoutResponse(hexToBytes(data)).then(function(character) {
+            resolve("ok");
+        }).catch(function(err) {
+            reject("some error while sending char data");
+        });
+    });
+  }
+
+ 
+  /**
+   * @bytesToHex
+   * Convert ByteArray to hex
+   */
+  function bytesToHex(data) {
+    return new Uint8Array(data).reduce(function(memo, i) {
+        return memo + ("0" + i.toString(16)).slice(-2);
+    }, "");
+  }
+
+  /**
+   * @hexToBytes
+   * Convert hex to ByteArray
+   */
+  function hexToBytes(hex) {
+    for (var bytes = [], c = 0; c < hex.length; c += 2)
+        bytes.push(parseInt(hex.substr(c, 2), 16));
+    return new Uint8Array(bytes);
+  }
+
+  /**
+   * @addLoginfo
+   * Displays the interaction information in the log box on the web page
+   */
+  function addLoginfo(logTXT) {
+    var time = new Date().toLocaleTimeString("de-DE");
+    var logString = time + ": > " + logTXT;
+    document.getElementById("log").innerHTML += logString + "\n";
+  }
+
+  /**
+   * @clearLoginfo
+   * Clear the information in the log box
+   */
+  function clearLoginfo() {
+    document.getElementById("log").value= "";
+  }
+
+  /**
+   * @Failed_info
+   * Display exception information
+   */
+  function Failed_info(err) {
+    addLoginfo("Update error: " + err);
+    setStatus("Update error: " + err);
+  }
+
+  /**
+   * @deviceDisconnect
+   * device disconnect
+   */
+  function deviceDisconnect() {
+    fanlight.disconnect();
+  }
+
+  /**
+   * @OTA_Authorization
+   * Process feedback after a command is sent
+   */
+  function OTA_Authorization(gattServer) {
+    heartRates = [];
+    gattServer.getPrimaryService("0000181f-0000-1000-8000-00805f9b34fb")
+      .then(service => {
+        addLoginfo("found heart rate service");
+        console.log(service);
+        ServiceMain = service;
+        return ServiceMain.getCharacteristic("00002a18-0000-1000-8000-00805f9b34fb");
+      })
+      .then(characteristic => {
+        addLoginfo('Found heart rate characteristic');
+        console.log(characteristic);
+        console.log(characteristic.properties);
+        nitifiyCharTemp = characteristic; 
+        return nitifiyCharTemp.startNotifications();
+      })
+      .then(() => {
+        nitifiyCharTemp.addEventListener('characteristicvaluechanged', event => {
+            var souvalue = event.target.value;
+            console.log(souvalue);
+            var ntvalue = bytesToHex(souvalue.buffer);
+            addLoginfo("notify-value: " + ntvalue);
+            author_log();
+            var getglucose = ntvalue.slice(24,28);
+            addLoginfo(getglucose);
+            ten = parseInt(getglucose,16);
+            addLoginfo("get value:" + ten);
+            document.getElementById("statusText").innerHTML = ten / 1000 + "%";
+        }).catch(error => console.log(error));
+      });
+  }
+
+  function author_log(){
+    var obj = document.getElementById("log");
+    obj.scrollTop = obj.scrollHeight;
+  }
+</script>
