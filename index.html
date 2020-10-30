@@ -20,7 +20,11 @@
           <button id="btn-connect" onclick="clickConnect()">scan bluetooth</button>
           <button id="btn-disconnet" onclick="deviceDisconnect()">Disconnect</button><br><br>
           <textarea id="log" cols="100" rows="20" readonly="readonly"></textarea>
-          <div id="statusText">Glucose value</div><br><br>
+        </div>
+        <div id="drop" style="width: 700px; height: 350px; float: right; background-color:#072b44">
+          <br><br>
+          <div id="statusText">Glucose Info</div><br><br><br><br>
+          <p id="glucose_value" style="float: left;">glucose value:</p>
         </div>
     </body>
 </html>
@@ -34,8 +38,6 @@
     var OTApause=1,OTApuasecount=0;               //OTA-puase,count
     var ten = 0;
 
-    var canvas = document.querySelector('canvas');
-    var statusText = document.querySelector('#statusText');
     var fanlight = new Fanlight();
 
     /**
@@ -134,17 +136,17 @@
    * @OTA_Authorization
    * Process feedback after a command is sent
    */
-  function OTA_Authorization(gattServer) {
+  function Data_info_manage(gattServer) {
     heartRates = [];
     gattServer.getPrimaryService("0000181f-0000-1000-8000-00805f9b34fb")
       .then(service => {
-        addLoginfo("found heart rate service");
+        addLoginfo("found glucose service");
         console.log(service);
         ServiceMain = service;
         return ServiceMain.getCharacteristic("00002a18-0000-1000-8000-00805f9b34fb");
       })
       .then(characteristic => {
-        addLoginfo('Found heart rate characteristic');
+        addLoginfo('Found glucose characteristic');
         console.log(characteristic);
         console.log(characteristic.properties);
         nitifiyCharTemp = characteristic; 
@@ -158,10 +160,9 @@
             addLoginfo("notify-value: " + ntvalue);
             author_log();
             var getglucose = ntvalue.slice(24,28);
-            addLoginfo(getglucose);
             ten = parseInt(getglucose,16);
             addLoginfo("get value:" + ten);
-            document.getElementById("statusText").innerHTML = ten / 1000 + "%";
+            document.getElementById("glucose_value").innerHTML = "glucose value --->: " + ten / 10000 + " mmol/L";
         }).catch(error => console.log(error));
       });
   }
